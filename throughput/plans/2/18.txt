@@ -1,0 +1,63 @@
+BEGIN;
+BEGIN
+EXPLAIN
+select
+	c_name,
+	c_custkey,
+	o_orderkey,
+	o_orderdate,
+	o_totalprice,
+	sum(l_quantity)
+from
+	customer,
+	orders,
+	lineitem
+where
+	o_orderkey in (
+		select
+			l_orderkey
+		from
+			lineitem
+		group by
+			l_orderkey having
+				sum(l_quantity) > 314
+	)
+	and c_custkey = o_custkey
+	and o_orderkey = l_orderkey
+group by
+	c_name,
+	c_custkey,
+	o_orderkey,
+	o_orderdate,
+	o_totalprice
+order by
+	o_totalprice desc,
+	o_orderdate
+LIMIT 100;
+                                                             QUERY PLAN                                                              
+-------------------------------------------------------------------------------------------------------------------------------------
+ Limit  (cost=118083801.03..118083803.78 rows=100 width=39)
+   ->  GroupAggregate  (cost=118083801.03..126342553.89 rows=300318286 width=39)
+         Group Key: orders.o_totalprice, orders.o_orderdate, customer.c_name, customer.c_custkey, orders.o_orderkey
+         ->  Sort  (cost=118083801.03..118834596.74 rows=300318286 width=39)
+               Sort Key: orders.o_totalprice DESC, orders.o_orderdate, customer.c_name, customer.c_custkey, orders.o_orderkey
+               ->  Hash Join  (cost=20421357.52..67584278.19 rows=300318286 width=39)
+                     Hash Cond: (orders.o_custkey = customer.c_custkey)
+                     ->  Merge Join  (cost=19731092.37..57509066.60 rows=300318286 width=20)
+                           Merge Cond: (orders.o_orderkey = lineitem.l_orderkey)
+                           ->  Merge Semi Join  (cost=19730711.89..26549058.47 rows=75074862 width=20)
+                                 Merge Cond: (orders.o_orderkey = lineitem_1.l_orderkey)
+                                 ->  Index Scan using pk_orders on orders  (cost=0.57..6436103.42 rows=150149723 width=16)
+                                 ->  Sort  (cost=19730711.32..19731856.22 rows=457962 width=4)
+                                       Sort Key: lineitem_1.l_orderkey
+                                       ->  HashAggregate  (cost=19677347.60..19683072.12 rows=457962 width=8)
+                                             Group Key: lineitem_1.l_orderkey
+                                             Filter: (sum(lineitem_1.l_quantity) > '314'::double precision)
+                                             ->  Seq Scan on lineitem lineitem_1  (cost=0.00..16674164.73 rows=600636573 width=8)
+                           ->  Index Scan using lineitem_l_orderkey_idx on lineitem  (cost=0.57..26270451.17 rows=600636573 width=8)
+                     ->  Hash  (cost=502764.51..502764.51 rows=15000051 width=23)
+                           ->  Seq Scan on customer  (cost=0.00..502764.51 rows=15000051 width=23)
+(21 rows)
+
+COMMIT;
+COMMIT
